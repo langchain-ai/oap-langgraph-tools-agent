@@ -37,11 +37,11 @@ class MCPConfig(BaseModel):
 
 class GraphConfigPydantic(BaseModel):
     model_name: Optional[str] = Field(
-        default="anthropic:claude-3-7-sonnet-latest",
+        default="openai:gpt-4.1",
         metadata={
             "x_oap_ui_config": {
                 "type": "select",
-                "default": "anthropic:claude-3-7-sonnet-latest",
+                "default": "openai:gpt-4.1",
                 "description": "The model to use in all generations",
                 "options": [
                     {
