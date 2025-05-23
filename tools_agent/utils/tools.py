@@ -2,6 +2,33 @@ from typing import Annotated
 from langchain_core.tools import StructuredTool, ToolException, tool
 import aiohttp
 import re
+from mcp.client.streamable_http import streamablehttp_client
+from mcp import ClientSession, Tool, McpError
+
+
+def create_langchain_mcp_tool(
+    mcp_tool: Tool, mcp_server_url: str, mcp_access_token: str
+) -> StructuredTool:
+    """Create a LangChain tool from an MCP tool."""
+
+    @tool(
+        mcp_tool.name,
+        description=mcp_tool.description,
+        args_schema=mcp_tool.inputSchema,
+    )
+    async def new_tool(**kwargs):
+        async with streamablehttp_client(
+            mcp_server_url, headers={"Authorization": f"Bearer {mcp_access_token}"}
+        ) as (
+            read_stream,
+            write_stream,
+            _,
+        ):
+            async with ClientSession(read_stream, write_stream) as tool_session:
+                await tool_session.initialize()
+                return await tool_session.call_tool(mcp_tool.name, arguments=kwargs)
+
+    return new_tool
 
 
 def wrap_mcp_authenticate_tool(tool: StructuredTool) -> StructuredTool:
@@ -12,30 +39,43 @@ def wrap_mcp_authenticate_tool(tool: StructuredTool) -> StructuredTool:
     old_coroutine = tool.coroutine
 
     async def wrapped_mcp_coroutine(**kwargs):
+        def _find_first_mcp_error_nested(exc: BaseException) -> McpError | None:
+            if isinstance(exc, McpError):  # McpError needs to be in scope
+                return exc
+            if isinstance(exc, ExceptionGroup):
+                for sub_exc in exc.exceptions:
+                    found = _find_first_mcp_error_nested(sub_exc)
+                    if found:
+                        return found
+            return None
+
         try:
             response = await old_coroutine(**kwargs)
             return response
-        except Exception as e:
-            if "TaskGroup" in str(e) and hasattr(e, "__context__"):
-                sub_exception = e.__context__
-                if hasattr(sub_exception, "error"):
-                    e = sub_exception
+        except BaseException as e_orig:
+            mcp_error_instance = _find_first_mcp_error_nested(e_orig)
 
-            if (
-                hasattr(e, "error")
-                and hasattr(e.error, "code")
-                and e.error.code == -32003
-                and hasattr(e.error, "data")
-            ):
-                error_message = (
-                    ((e.error.data or {}).get("message") or {}).get("text")
-                ) or "Required interaction"
+            if mcp_error_instance:
+                current_error_details = mcp_error_instance.error
+                if (
+                    hasattr(current_error_details, "code")
+                    and current_error_details.code == -32003  # interaction_required
+                    and hasattr(current_error_details, "data")
+                ):
+                    error_data = current_error_details.data or {}
+                    message_payload = error_data.get("message") or {}
+                    error_message_text = (
+                        message_payload.get("text")
+                        if isinstance(message_payload, dict)
+                        else "Required interaction"
+                    )
+                    error_message_text = error_message_text or "Required interaction"
 
-                if url := (e.error.data or {}).get("url"):
-                    error_message += f": {url}"
-
-                raise ToolException(error_message)
-            raise e
+                    if url := error_data.get("url"):
+                        error_message_text += f" {url}"
+                    raise ToolException(error_message_text) from e_orig
+                else:
+                    raise e_orig
 
     tool.coroutine = wrapped_mcp_coroutine
     return tool

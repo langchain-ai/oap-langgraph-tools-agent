@@ -4,9 +4,15 @@ from pydantic import BaseModel, Field
 from langgraph.prebuilt import create_react_agent
 from tools_agent.utils.tools import create_rag_tool
 from langchain.chat_models import init_chat_model
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from tools_agent.utils.token import fetch_tokens
-from tools_agent.utils.tools import wrap_mcp_authenticate_tool
+from mcp.client.streamable_http import streamablehttp_client
+from mcp import ClientSession
+from langchain_core.tools import StructuredTool
+from tools_agent.utils.tools import (
+    wrap_mcp_authenticate_tool,
+    create_langchain_mcp_tool,
+)
+
 
 UNEDITABLE_SYSTEM_PROMPT = "\nIf the tool throws an error requiring authentication, provide the user with a Markdown link to the authentication page and prompt them to authenticate."
 
@@ -143,24 +149,60 @@ async def graph(config: RunnableConfig):
         and cfg.mcp_config.tools
         and (mcp_tokens := await fetch_tokens(config))
     ):
-        mcp_client = MultiServerMCPClient(
-            connections={
-                "mcp_server": {
-                    "transport": "streamable_http",
-                    "url": cfg.mcp_config.url.rstrip("/") + "/mcp",
-                    "headers": {
-                        "Authorization": f"Bearer {mcp_tokens['access_token']}"
-                    },
-                }
-            }
-        )
-        tools.extend(
-            [
-                wrap_mcp_authenticate_tool(tool)
-                for tool in await mcp_client.get_tools()
-                if tool.name in cfg.mcp_config.tools
-            ]
-        )
+        server_url = cfg.mcp_config.url.rstrip("/") + "/mcp"
+        access_token = mcp_tokens["access_token"]
+        # Set of tool names we need to find from the configuration
+        tool_names_to_find = set(cfg.mcp_config.tools)
+        # List to store the actual tool objects that are found and match the request
+        fetched_mcp_tools_list: list[StructuredTool] = []
+        # Set to keep track of the names of tools already added
+        names_of_tools_added = set()
+
+        current_tools_cursor: str | None = None
+
+        async with streamablehttp_client(
+            server_url, headers={"Authorization": f"Bearer {access_token}"}
+        ) as (
+            read_stream,
+            write_stream,
+            _,
+        ):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+
+                while True:
+                    tool_page_response = await session.list_tools(
+                        cursor=current_tools_cursor
+                    )
+
+                    if tool_page_response and len(tool_page_response.tools) > 0:
+                        for mcp_tool in tool_page_response.tools:
+                            if (
+                                mcp_tool.name in tool_names_to_find
+                                and mcp_tool.name not in names_of_tools_added
+                            ):
+                                langchain_mcp_tool = create_langchain_mcp_tool(
+                                    mcp_tool, server_url, access_token
+                                )
+                                fetched_mcp_tools_list.append(
+                                    wrap_mcp_authenticate_tool(langchain_mcp_tool)
+                                )
+                                names_of_tools_added.add(mcp_tool.name)
+
+                    current_tools_cursor = tool_page_response.nextCursor
+
+                    all_requested_tools_found = False
+                    if not tool_names_to_find:  # If cfg.mcp_config.tools was empty
+                        all_requested_tools_found = (
+                            True  # Condition met: zero out of zero tools found.
+                        )
+                    elif len(names_of_tools_added) == len(tool_names_to_find):
+                        all_requested_tools_found = True
+
+                    if not current_tools_cursor or all_requested_tools_found:
+                        break
+
+                tools.extend(fetched_mcp_tools_list)
 
     model = init_chat_model(
         cfg.model_name,
