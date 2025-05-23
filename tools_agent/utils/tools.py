@@ -7,7 +7,7 @@ from mcp import ClientSession, Tool, McpError
 
 
 def create_langchain_mcp_tool(
-    mcp_tool: Tool, mcp_server_url: str, mcp_access_token: str
+    mcp_tool: Tool, mcp_server_url: str = "", headers: dict[str, str] = {}
 ) -> StructuredTool:
     """Create a LangChain tool from an MCP tool."""
 
@@ -17,13 +17,9 @@ def create_langchain_mcp_tool(
         args_schema=mcp_tool.inputSchema,
     )
     async def new_tool(**kwargs):
-        async with streamablehttp_client(
-            mcp_server_url, headers={"Authorization": f"Bearer {mcp_access_token}"}
-        ) as (
-            read_stream,
-            write_stream,
-            _,
-        ):
+        """Dynamically created MCP tool."""
+        async with streamablehttp_client(mcp_server_url, headers=headers) as streams:
+            read_stream, write_stream, _ = streams
             async with ClientSession(read_stream, write_stream) as tool_session:
                 await tool_session.initialize()
                 return await tool_session.call_tool(mcp_tool.name, arguments=kwargs)
@@ -40,42 +36,39 @@ def wrap_mcp_authenticate_tool(tool: StructuredTool) -> StructuredTool:
 
     async def wrapped_mcp_coroutine(**kwargs):
         def _find_first_mcp_error_nested(exc: BaseException) -> McpError | None:
-            if isinstance(exc, McpError):  # McpError needs to be in scope
+            if isinstance(exc, McpError):
                 return exc
             if isinstance(exc, ExceptionGroup):
                 for sub_exc in exc.exceptions:
-                    found = _find_first_mcp_error_nested(sub_exc)
-                    if found:
+                    if found := _find_first_mcp_error_nested(sub_exc):
                         return found
             return None
 
         try:
-            response = await old_coroutine(**kwargs)
-            return response
+            return await old_coroutine(**kwargs)
         except BaseException as e_orig:
-            mcp_error_instance = _find_first_mcp_error_nested(e_orig)
+            mcp_error = _find_first_mcp_error_nested(e_orig)
 
-            if mcp_error_instance:
-                current_error_details = mcp_error_instance.error
-                if (
-                    hasattr(current_error_details, "code")
-                    and current_error_details.code == -32003  # interaction_required
-                    and hasattr(current_error_details, "data")
-                ):
-                    error_data = current_error_details.data or {}
-                    message_payload = error_data.get("message") or {}
+            if not mcp_error:
+                raise e_orig
+
+            error_details = mcp_error.error
+            is_interaction_required = getattr(error_details, "code", None) == -32003
+            error_data = getattr(error_details, "data", None) or {}
+
+            if is_interaction_required:
+                message_payload = error_data.get("message", {})
+                error_message_text = "Required interaction"
+                if isinstance(message_payload, dict):
                     error_message_text = (
-                        message_payload.get("text")
-                        if isinstance(message_payload, dict)
-                        else "Required interaction"
+                        message_payload.get("text") or error_message_text
                     )
-                    error_message_text = error_message_text or "Required interaction"
 
-                    if url := error_data.get("url"):
-                        error_message_text += f" {url}"
-                    raise ToolException(error_message_text) from e_orig
-                else:
-                    raise e_orig
+                if url := error_data.get("url"):
+                    error_message_text = f"{error_message_text} {url}"
+                raise ToolException(error_message_text) from e_orig
+
+            raise e_orig
 
     tool.coroutine = wrapped_mcp_coroutine
     return tool

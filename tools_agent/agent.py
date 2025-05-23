@@ -156,46 +156,41 @@ async def graph(config: RunnableConfig):
         fetched_mcp_tools_list: list[StructuredTool] = []
         names_of_tools_added = set()
 
-        current_tools_cursor: str | None = None
-
-        async with streamablehttp_client(
-            server_url, headers={"Authorization": f"Bearer {access_token}"}
-        ) as (
-            read_stream,
-            write_stream,
-            _,
-        ):
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with streamablehttp_client(server_url, headers=headers) as streams:
+            read_stream, write_stream, _ = streams
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
 
-                while True:
-                    tool_page_response = await session.list_tools(
-                        cursor=current_tools_cursor
-                    )
+                page_cursor = None
 
-                    if tool_page_response and len(tool_page_response.tools) > 0:
-                        for mcp_tool in tool_page_response.tools:
-                            if (
-                                mcp_tool.name in tool_names_to_find
-                                and mcp_tool.name not in names_of_tools_added
-                            ):
-                                langchain_mcp_tool = create_langchain_mcp_tool(
-                                    mcp_tool, server_url, access_token
-                                )
-                                fetched_mcp_tools_list.append(
-                                    wrap_mcp_authenticate_tool(langchain_mcp_tool)
-                                )
+                while True:
+                    tool_list_page = await session.list_tools(cursor=page_cursor)
+
+                    if not tool_list_page or not tool_list_page.tools:
+                        break
+
+                    for mcp_tool in tool_list_page.tools:
+                        if not tool_names_to_find or (
+                            mcp_tool.name in tool_names_to_find
+                            and mcp_tool.name not in names_of_tools_added
+                        ):
+                            langchain_tool = create_langchain_mcp_tool(
+                                mcp_tool, mcp_server_url=server_url, headers=headers
+                            )
+                            fetched_mcp_tools_list.append(
+                                wrap_mcp_authenticate_tool(langchain_tool)
+                            )
+                            if tool_names_to_find:
                                 names_of_tools_added.add(mcp_tool.name)
 
-                    current_tools_cursor = tool_page_response.nextCursor
+                    page_cursor = tool_list_page.nextCursor
 
-                    all_requested_tools_found = False
-                    if not tool_names_to_find:
-                        all_requested_tools_found = True
-                    elif len(names_of_tools_added) == len(tool_names_to_find):
-                        all_requested_tools_found = True
-
-                    if not current_tools_cursor or all_requested_tools_found:
+                    if not page_cursor:
+                        break
+                    if tool_names_to_find and len(names_of_tools_added) == len(
+                        tool_names_to_find
+                    ):
                         break
 
                 tools.extend(fetched_mcp_tools_list)
