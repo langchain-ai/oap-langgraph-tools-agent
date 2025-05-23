@@ -151,11 +151,9 @@ async def graph(config: RunnableConfig):
     ):
         server_url = cfg.mcp_config.url.rstrip("/") + "/mcp"
         access_token = mcp_tokens["access_token"]
-        # Set of tool names we need to find from the configuration
+
         tool_names_to_find = set(cfg.mcp_config.tools)
-        # List to store the actual tool objects that are found and match the request
         fetched_mcp_tools_list: list[StructuredTool] = []
-        # Set to keep track of the names of tools already added
         names_of_tools_added = set()
 
         current_tools_cursor: str | None = None
@@ -192,10 +190,8 @@ async def graph(config: RunnableConfig):
                     current_tools_cursor = tool_page_response.nextCursor
 
                     all_requested_tools_found = False
-                    if not tool_names_to_find:  # If cfg.mcp_config.tools was empty
-                        all_requested_tools_found = (
-                            True  # Condition met: zero out of zero tools found.
-                        )
+                    if not tool_names_to_find:
+                        all_requested_tools_found = True
                     elif len(names_of_tools_added) == len(tool_names_to_find):
                         all_requested_tools_found = True
 
