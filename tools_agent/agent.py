@@ -152,8 +152,12 @@ async def graph(config: RunnableConfig):
         mcp_tokens = await fetch_tokens(config)
     else:
         mcp_tokens = None
-    if cfg.mcp_config and cfg.mcp_config.url and cfg.mcp_config.tools and (mcp_tokens or not cfg.mcp_config.auth_required):
-
+    if (
+        cfg.mcp_config
+        and cfg.mcp_config.url
+        and cfg.mcp_config.tools
+        and (mcp_tokens or not cfg.mcp_config.auth_required)
+    ):
         server_url = cfg.mcp_config.url.rstrip("/") + "/mcp"
 
         tool_names_to_find = set(cfg.mcp_config.tools)
@@ -166,43 +170,47 @@ async def graph(config: RunnableConfig):
             and {"Authorization": f"Bearer {mcp_tokens['access_token']}"}
             or None
         )
-        async with streamablehttp_client(server_url, headers=headers) as streams:
-            read_stream, write_stream, _ = streams
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
+        try:
+            async with streamablehttp_client(server_url, headers=headers) as streams:
+                read_stream, write_stream, _ = streams
+                async with ClientSession(read_stream, write_stream) as session:
+                    await session.initialize()
 
-                page_cursor = None
+                    page_cursor = None
 
-                while True:
-                    tool_list_page = await session.list_tools(cursor=page_cursor)
+                    while True:
+                        tool_list_page = await session.list_tools(cursor=page_cursor)
 
-                    if not tool_list_page or not tool_list_page.tools:
-                        break
+                        if not tool_list_page or not tool_list_page.tools:
+                            break
 
-                    for mcp_tool in tool_list_page.tools:
-                        if not tool_names_to_find or (
-                            mcp_tool.name in tool_names_to_find
-                            and mcp_tool.name not in names_of_tools_added
+                        for mcp_tool in tool_list_page.tools:
+                            if not tool_names_to_find or (
+                                mcp_tool.name in tool_names_to_find
+                                and mcp_tool.name not in names_of_tools_added
+                            ):
+                                langchain_tool = create_langchain_mcp_tool(
+                                    mcp_tool, mcp_server_url=server_url, headers=headers
+                                )
+                                fetched_mcp_tools_list.append(
+                                    wrap_mcp_authenticate_tool(langchain_tool)
+                                )
+                                if tool_names_to_find:
+                                    names_of_tools_added.add(mcp_tool.name)
+
+                        page_cursor = tool_list_page.nextCursor
+
+                        if not page_cursor:
+                            break
+                        if tool_names_to_find and len(names_of_tools_added) == len(
+                            tool_names_to_find
                         ):
-                            langchain_tool = create_langchain_mcp_tool(
-                                mcp_tool, mcp_server_url=server_url, headers=headers
-                            )
-                            fetched_mcp_tools_list.append(
-                                wrap_mcp_authenticate_tool(langchain_tool)
-                            )
-                            if tool_names_to_find:
-                                names_of_tools_added.add(mcp_tool.name)
+                            break
 
-                    page_cursor = tool_list_page.nextCursor
-
-                    if not page_cursor:
-                        break
-                    if tool_names_to_find and len(names_of_tools_added) == len(
-                        tool_names_to_find
-                    ):
-                        break
-
-                tools.extend(fetched_mcp_tools_list)
+                    tools.extend(fetched_mcp_tools_list)
+        except Exception as e:
+            print(f"Failed to fetch MCP tools: {e}")
+            pass
 
     model = init_chat_model(
         cfg.model_name,
