@@ -91,7 +91,7 @@ async def set_tokens(config: RunnableConfig, tokens: dict[str, Any]):
     return
 
 
-async def fetch_tokens(config: RunnableConfig) -> dict[str, Any]:
+async def fetch_tokens(config: RunnableConfig) -> dict[str, Any] | None:
     """
     Fetch MCP access token if it doesn't already exist in the store.
 
