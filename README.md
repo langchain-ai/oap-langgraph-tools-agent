@@ -26,7 +26,7 @@ source .venv/bin/activate
 Install dependencies:
 
 ```bash
-uv run pip install -e .
+uv sync
 ```
 
 Then set the environment variables:

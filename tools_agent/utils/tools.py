@@ -7,7 +7,7 @@ from mcp import ClientSession, Tool, McpError
 
 
 def create_langchain_mcp_tool(
-    mcp_tool: Tool, mcp_server_url: str = "", headers: dict[str, str] = {}
+    mcp_tool: Tool, mcp_server_url: str = "", headers: dict[str, str] | None = None
 ) -> StructuredTool:
     """Create a LangChain tool from an MCP tool."""
 

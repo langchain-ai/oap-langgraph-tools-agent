@@ -39,7 +39,7 @@ class MCPConfig(BaseModel):
         optional=True,
     )
     """The tools to make available to the LLM"""
-    auth_required: Optional[bool] = Field( 
+    auth_required: Optional[bool] = Field(
         default=False,
         optional=True,
     )
