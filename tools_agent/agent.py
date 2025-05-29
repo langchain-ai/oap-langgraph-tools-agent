@@ -39,6 +39,11 @@ class MCPConfig(BaseModel):
         optional=True,
     )
     """The tools to make available to the LLM"""
+    auth_required: Optional[bool] = Field(
+        default=False,
+        optional=True,
+    )
+    """Whether the MCP server requires authentication"""
 
 
 class GraphConfigPydantic(BaseModel):
@@ -143,20 +148,24 @@ async def graph(config: RunnableConfig):
             )
             tools.append(rag_tool)
 
-    if (
-        cfg.mcp_config
-        and cfg.mcp_config.url
-        and cfg.mcp_config.tools
-        and (mcp_tokens := await fetch_tokens(config))
-    ):
+    if cfg.mcp_config and cfg.mcp_config.auth_required:
+        mcp_tokens = await fetch_tokens(config)
+    else:
+        mcp_tokens = None
+    if cfg.mcp_config and cfg.mcp_config.url and cfg.mcp_config.tools and (mcp_tokens or not cfg.mcp_config.auth_required):
+
         server_url = cfg.mcp_config.url.rstrip("/") + "/mcp"
-        access_token = mcp_tokens["access_token"]
 
         tool_names_to_find = set(cfg.mcp_config.tools)
         fetched_mcp_tools_list: list[StructuredTool] = []
         names_of_tools_added = set()
 
-        headers = {"Authorization": f"Bearer {access_token}"}
+        # If the tokens are not None, then we need to add the authorization header. otherwise make headers None
+        headers = (
+            mcp_tokens is not None
+            and {"Authorization": f"Bearer {mcp_tokens['access_token']}"}
+            or None
+        )
         async with streamablehttp_client(server_url, headers=headers) as streams:
             read_stream, write_stream, _ = streams
             async with ClientSession(read_stream, write_stream) as session:
