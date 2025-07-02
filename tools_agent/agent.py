@@ -241,7 +241,7 @@ async def graph(config: RunnableConfig):
         cfg.model_name,
         temperature=cfg.temperature,
         max_tokens=cfg.max_tokens,
-        api_key=get_api_key_for_model(cfg.model_name, config) or "No token found",
+        api_key=get_api_key_for_model(cfg.model_name, config) or "No token found"
     )
 
     return create_react_agent(
