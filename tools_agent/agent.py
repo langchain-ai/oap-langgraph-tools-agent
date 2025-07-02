@@ -1,3 +1,4 @@
+import os
 from langchain_core.runnables import RunnableConfig
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -136,6 +137,30 @@ class GraphConfigPydantic(BaseModel):
     )
 
 
+def get_api_key_for_model(model_name: str, config: RunnableConfig):
+    should_get_from_config = os.getenv("GET_API_KEYS_FROM_CONFIG", False)
+    model_name = model_name.lower()
+    if should_get_from_config:
+        api_keys = config.get("configurable", {}).get("apiKeys", {})
+        if not api_keys:
+            return None
+        if model_name.startswith("openai:"):
+            return api_keys.get("OPENAI_API_KEY")
+        elif model_name.startswith("anthropic:"):
+            return api_keys.get("ANTHROPIC_API_KEY")
+        elif model_name.startswith("gemini:"):
+            return api_keys.get("GEMINI_API_KEY")
+        return None
+    else:
+        if model_name.startswith("openai:"): 
+            return os.getenv("OPENAI_API_KEY")
+        elif model_name.startswith("anthropic:"):
+            return os.getenv("ANTHROPIC_API_KEY")
+        elif model_name.startswith("gemini:"):
+            return os.getenv("GEMINI_API_KEY")
+        return None
+
+
 async def graph(config: RunnableConfig):
     cfg = GraphConfigPydantic(**config.get("configurable", {}))
     tools = []
@@ -216,7 +241,9 @@ async def graph(config: RunnableConfig):
         cfg.model_name,
         temperature=cfg.temperature,
         max_tokens=cfg.max_tokens,
+        api_key=get_api_key_for_model(cfg.model_name, config) or "No token found",
     )
+    print(f"API KEY:",  get_api_key_for_model(cfg.model_name, config))
 
     return create_react_agent(
         prompt=cfg.system_prompt + UNEDITABLE_SYSTEM_PROMPT,
