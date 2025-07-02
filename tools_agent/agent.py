@@ -243,7 +243,6 @@ async def graph(config: RunnableConfig):
         max_tokens=cfg.max_tokens,
         api_key=get_api_key_for_model(cfg.model_name, config) or "No token found",
     )
-    print(f"API KEY:",  get_api_key_for_model(cfg.model_name, config))
 
     return create_react_agent(
         prompt=cfg.system_prompt + UNEDITABLE_SYSTEM_PROMPT,
