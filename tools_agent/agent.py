@@ -138,9 +138,9 @@ class GraphConfigPydantic(BaseModel):
 
 
 def get_api_key_for_model(model_name: str, config: RunnableConfig):
-    should_get_from_config = os.getenv("GET_API_KEYS_FROM_CONFIG", False)
+    should_get_from_config = os.getenv("GET_API_KEYS_FROM_CONFIG", "false")
     model_name = model_name.lower()
-    if should_get_from_config:
+    if should_get_from_config.lower() == "true":
         api_keys = config.get("configurable", {}).get("apiKeys", {})
         if not api_keys:
             return None
