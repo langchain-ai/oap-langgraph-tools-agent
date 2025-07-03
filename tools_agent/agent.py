@@ -138,27 +138,22 @@ class GraphConfigPydantic(BaseModel):
 
 
 def get_api_key_for_model(model_name: str, config: RunnableConfig):
-    should_get_from_config = os.getenv("GET_API_KEYS_FROM_CONFIG", "false")
     model_name = model_name.lower()
-    if should_get_from_config.lower() == "true":
+    model_to_key = {
+        "openai:": "OPENAI_API_KEY",
+        "anthropic:": "ANTHROPIC_API_KEY", 
+        "google": "GOOGLE_API_KEY"
+    }
+    key_name = next((key for prefix, key in model_to_key.items() 
+                    if model_name.startswith(prefix)), None)
+    if not key_name:
+        return None
+    if os.getenv("GET_API_KEYS_FROM_CONFIG", "false").lower() == "true":
         api_keys = config.get("configurable", {}).get("apiKeys", {})
-        if not api_keys:
-            return None
-        if model_name.startswith("openai:"):
-            return api_keys.get("OPENAI_API_KEY")
-        elif model_name.startswith("anthropic:"):
-            return api_keys.get("ANTHROPIC_API_KEY")
-        elif model_name.startswith("google"):
-            return api_keys.get("GOOGLE_API_KEY")
-        return None
-    else:
-        if model_name.startswith("openai:"): 
-            return os.getenv("OPENAI_API_KEY")
-        elif model_name.startswith("anthropic:"):
-            return os.getenv("ANTHROPIC_API_KEY")
-        elif model_name.startswith("google"):
-            return os.getenv("GOOGLE_API_KEY")
-        return None
+        if api_keys and api_keys.get(key_name) and len(api_keys["key_name"]) > 0:
+            return api_keys[key_name]
+    # Fallback to environment variable
+    return os.getenv(key_name)
 
 
 async def graph(config: RunnableConfig):
