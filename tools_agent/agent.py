@@ -150,7 +150,7 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig):
         return None
     if os.getenv("GET_API_KEYS_FROM_CONFIG", "false").lower() == "true":
         api_keys = config.get("configurable", {}).get("apiKeys", {})
-        if api_keys and api_keys.get(key_name) and len(api_keys["key_name"]) > 0:
+        if api_keys and api_keys.get(key_name) and len(api_keys[key_name]) > 0:
             return api_keys[key_name]
     # Fallback to environment variable
     return os.getenv(key_name)
