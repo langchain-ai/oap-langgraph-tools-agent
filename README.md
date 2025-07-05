@@ -86,3 +86,8 @@ For creation methods, it auto-injects the user's ID into the metadata. This is t
 By using custom authentication, we can call this LangGraph server directly from a frontend application, without having to worry about exposing API keys/secrets, since you only need a JWT token from Supabase to authenticate.
 
 For more info, see our [LangGraph custom auth docs](https://langchain-ai.github.io/langgraph/tutorials/auth/getting_started/).
+
+## Model API Keys
+This agent is configured to accept model API keys set by a user in the OAP settings page. The default OAP implementation allows users to add their own OpenAI, Anthropic, and Google API keys, and these can easily be extended in OAP.
+
+If a user sets their API keys in the OAP settings page, those keys will be passed to the agent through the config in an 'apiKeys' field and used by default. Otherwise, we will automatically fall back on the environment variables set in the agent deployed on LangGraph platform.
