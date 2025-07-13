@@ -11,6 +11,7 @@ First, clone the repository and create a new virtual environment:
 
 ```bash
 git clone https://github.com/langchain-ai/oap-langgraph-tools-agent.git
+cd oap-langgraph-tools-agent
 ```
 
 ```bash
