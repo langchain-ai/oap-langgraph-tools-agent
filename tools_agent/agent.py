@@ -57,6 +57,10 @@ class GraphConfigPydantic(BaseModel):
                 "description": "The model to use in all generations",
                 "options": [
                     {
+                        "label": "Claude Sonnet 4",
+                        "value": "anthropic:claude-sonnet-4-0",
+                    },
+                    {
                         "label": "Claude 3.7 Sonnet",
                         "value": "anthropic:claude-3-7-sonnet-latest",
                     },
@@ -64,9 +68,17 @@ class GraphConfigPydantic(BaseModel):
                         "label": "Claude 3.5 Sonnet",
                         "value": "anthropic:claude-3-5-sonnet-latest",
                     },
+                    {
+                        "label": "Claude 3.5 Haiku",
+                        "value": "anthropic:claude-3-5-haiku-latest",
+                    },
+                    {"label": "o4 mini", "value": "openai:o4-mini"},
+                    {"label": "o3", "value": "openai:o3"},
+                    {"label": "o3 mini", "value": "openai:o3-mini"},
                     {"label": "GPT 4o", "value": "openai:gpt-4o"},
                     {"label": "GPT 4o mini", "value": "openai:gpt-4o-mini"},
                     {"label": "GPT 4.1", "value": "openai:gpt-4.1"},
+                    {"label": "GPT 4.1 mini", "value": "openai:gpt-4.1-mini"},
                 ],
             }
         },
