@@ -7,12 +7,12 @@ authors = [
 ]
 requires-python = ">=3.11.0,<3.13"
 dependencies = [
-    "langgraph>=0.4.3",
-    "langchain-anthropic>=0.3.13",
-    "langchain-core>=0.3.59",
-    "langchain-openai>=0.3.16",
+    "langgraph>=0.6.2",
+    "langchain-anthropic>=0.3.18",
+    "langchain-core>=0.3.72",
+    "langchain-openai>=0.3.28",
     "pydantic==2.11.3",
-    "langchain>=0.3.25",
+    "langchain>=0.3.27",
     "mcp>=1.9.1",
     "supabase>=2.15.1",
     "aiohttp>=3.8.0",
@@ -23,6 +23,6 @@ packages = ["tools_agent"]
 
 [dependency-groups]
 dev = [
-    "langgraph-cli[inmem]>=0.2.10",
+    "langgraph-cli[inmem]>=0.3.6",
     "ruff>=0.8.4",
 ]
